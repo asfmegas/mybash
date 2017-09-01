@@ -1,0 +1,58 @@
+############################################################
+vdown - Script para download de vídeos do YouTube
+escrito por: Alexsandro Façanha
+ano: 2016
+
+sintaxe: vdown [opção] [endereço web] [comentário]
+
+-a --arq    --> arquiva lista atual
+-d --down   --> inicia fila de download
+-i --infor  --> exibe informações do vdown
+-c --clear  --> limpar lista padrão
+-s --save   --> inserir arquivos na lista de download
+	[ $ vdown -s <url> <titulo_do_video> ]
+-v --view   --> visualiza lista conteúdo da lista padrão
+-f --files  --> exibe listas arquivas
+	[ $ vdown -f ]
+	[ $ vdown -f <data_arquivamento> ]
+--open      --> abrir lista padrão com editor vim
+
+
+Em lista
+	--add          --> adicionar n urls de uma só vez
+		[ $ vdown --add <lista> <msg> url1 url2 url3 ... urln ]
+	--create-list  --> criar uma lista
+	-al --add-list --> adicionar conteúdo a lista padrão
+	--view-list    --> exibir conteúdo da lista
+	--down-list    --> baixar vídeos da lista
+		[ $ vdown --down-lists <até_3_listas> ]
+	--down-lists --> baixar todas as listas criadas
+		[ $ vdown --down-lists ]
+	--clear-list   --> limpar lista
+	--clear-all    --> limpar todas as listas criadas
+	--arq-list     --> arquivar lista
+		[ $ vdown --arq-lists <até_3_listas> ]
+		[ $ vdown --arq-lists -y [-2|-3] <listas> ]
+	--remove-list  --> apagar lista
+	-cl --content-lists --> exibir conteúdo das listas
+	--restore      --> restaurar dados já arquivodos
+		[ $ vdown --restore <lista> <daddos_arquivados> ]
+	--open-list    --> abrir uma lista com editor gedit
+		[ $ vdown --open-list <lista> ]
+	--remove-tmp   --> remover lista arquivas
+		[$ vdown --remove-tmp <lista_arquivada>]
+
+alias:
+
+	alias ds='vdown -s'
+	alias dv='vdown -v'
+	alias ddown='vdown -d'
+	alias da='vdown -a'
+	alias dcl='vdown -cl'
+	alias down-lists='vdown --down-lists'
+	alias down-list='vdown --down-list'
+	alias add-list='vdown --add-list'
+	alias adds='vdown --add'
+
+
+###########################################################

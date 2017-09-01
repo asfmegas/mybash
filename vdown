@@ -1,0 +1,792 @@
+#!/bin/bash
+# vdown é um script para baixar uma fila de vídeos do youtube. Ele funciona com o programa cclive.
+# escrito por: Alexsandro Façanha
+# ano: 2016
+# Dependência: Cclive 0.7.16
+
+data=`date +%d%m%y%H%M`
+data_add=`date +%d/%m/%y`
+
+
+if [ $# -ge 1 ]; then
+	if [ $1 != "-i" ]; then
+		if [ -d $HOME/vdown_tmp ]; then
+			ptmp=$HOME/vdown_tmp
+		else
+			mkdir -p $HOME/vdown_tmp/archived
+			ptmp=$HOME/vdown_tmp
+		fi
+	fi
+fi
+
+deletarTmp() {
+	if [ -f $HOME/vdown_tmp/tmp.txt ]; then
+		rm $ptmp/tmp.txt;
+	fi
+}
+
+
+# Em caso de interrupção do comando o arquivo tmp.txt não será apagado. Se isso acontecer essa condição 
+# apagará-lo quando o comando for requisitado novamente.
+deletarTmp
+
+
+if [ $# -eq 1 ]; then
+	case $1 in
+		#Arquiva lista
+		-a | --arq)
+			if [ -f $ptmp/tmp.log ]; then
+				printf "Deseja arquivar os dados[s/n]: "
+				read question
+				if [ $question == "S" ] || [ $question == "s" ]; then
+					mv $ptmp/tmp.log $ptmp/archived/tmp_$data.log
+					deletarTmp
+				fi
+			else
+				echo "Lista Vazia"
+			fi;;
+		#Exibe informações do comando
+		-i | --infor)
+			if [ -f $HOME/mybin/infor-vdown ]; then
+				cat $HOME/mybin/infor-vdown | less
+			else
+				echo "Sem informações disponível"
+			fi ;;
+		#Realiza download dos arquivos na lista
+		-d | --down)
+			if [ -f $ptmp/tmp.log ]; then
+				cat $ptmp/tmp.log > $ptmp/tmp.txt
+			else
+				echo "Nenhum arquivo na lista padão para ser baixado!"
+				exit 0
+			fi
+			if which cclive &> /dev/null; then
+				if [ -f $ptmp/tmp.txt ]; then
+					count=$(cat $ptmp/tmp.txt | wc -l) # conta quantas linhas o arquivo tmp.txt possui
+					line=1
+					if [ $count -gt 0 ]; then
+						while read leia; do
+							if [ -d $HOME/vdown_video ]; then
+								echo "Linha: $line"
+								cd $HOME/vdown_video
+								cclive -s best $leia
+								line=$[line + 1]
+							else
+								mkdir $HOME/vdown_video
+								echo "Linha: $line"
+								cd $HOME/vdown_video
+								cclive -s best $leia
+								line=$[line + 1]
+							fi
+						done < $ptmp/tmp.txt
+						deletarTmp
+					else
+						echo "Não há vídeos a serem baixados!"
+					fi
+				else
+					echo "O arquivo tmp.txt não foi criado"	
+				fi 
+			else
+				echo -e "Instale o cclive com:\n$ sudo apt-get install cclive"
+			fi;;
+		#Visualiza os arquivos da lista atual
+		-v | --view)
+			if [ -f $ptmp/tmp.log ]; then
+				count=$(cat $ptmp/tmp.log | wc -l) # conta as linhas do arquivo tmp.log
+				if [ $count -gt 0 ]; then
+					echo "" >> $ptmp/lista.tmp
+					echo '### Lista "Padrão" - total: '$count' ###' >> $ptmp/lista.tmp
+					echo "" >> $ptmp/lista.tmp
+					while read linha; do
+						titulo=$(echo $linha | cut -d"#" -f2 | sed 'y/-/ /')
+						url=$(echo $linha | cut -d"#" -f1)
+						dt=$(echo $linha | cut -d"#" -f3)
+						echo "$titulo:  $url ($dt)" >> $ptmp/lista.tmp
+					done < $ptmp/tmp.log
+					if [ $count -gt 30 ]; then
+						cat $ptmp/lista.tmp | less
+						rm $ptmp/lista.tmp
+					else
+						cat $ptmp/lista.tmp
+						rm $ptmp/lista.tmp
+					fi
+				else
+					echo "A lista padrão está vazia!"
+				fi
+			else
+				echo "Nenhum arquivo na fila de espera da lista padrão!"
+			fi ;;
+		#Exibe todas as listas já arquivadas
+		-f | --files)
+			if ls $HOME/vdown_tmp/archived/*.log &> /dev/null ; then
+				echo "Processos arquivados ----------------------------------------"
+				ls -t $HOME/vdown_tmp/archived
+			else
+				echo "Não existe nada arquivado no momento!"
+			fi;;
+		#Limpa a lista atual
+		-c | --clear)
+			if [ -f $HOME/vdown_tmp/tmp.log ]; then
+				count=$(cat $HOME/vdown_tmp/tmp.log | wc -l) # conta as linhas do arquivo tmp.log
+				if [ $count -gt 0 ]; then
+					rm $HOME/vdown_tmp/tmp.log
+					touch $HOME/vdown_tmp/tmp.log
+				else
+					echo "Não existe arquivos na fila de espera da lista padrão"
+				fi
+			else
+				echo "Não existe arquivos na fila de espera da lista padrão"
+			fi;;
+		--open)
+			if [ -f $HOME/vdown_tmp/tmp.log ] ; then
+				count=$(cat $HOME/vdown_tmp/tmp.log | wc -l) # conta as linhas do arquivo tmp.log
+				if [ $count -gt 0 ]; then
+					vim $HOME/vdown_tmp/tmp.log
+				else
+					echo "A lista está vazia!"
+				fi
+			else
+				echo "Lista vazia!"
+			fi;;
+		--lists)
+			if [ -d $HOME/vdown_tmp/lists ]; then
+				vl=$(ls $HOME/vdown_tmp/lists | wc -l) # conta as linhas do arquivo lists
+				if [ $vl -ge 1 ]; then
+					ls $HOME/vdown_tmp/lists | cat -n
+				else
+					echo "Não existe listas criadas"
+				fi
+			else
+				echo "Não existe listas criadas"
+			fi;;
+		-cl | --content-lists)
+			if [ -d $HOME/vdown_tmp/lists/ ]; then
+				nome_lista=$(ls -R $HOME/vdown_tmp/lists/ | grep ".log" | cut -d"_" -f2 | cut -d"." -f1)
+				for nome in $nome_lista; do
+					count=$(cat $HOME/vdown_tmp/lists/$nome/list_$nome.log | wc -l)
+					if [ $count -eq 0 ]; then
+						echo 'A lista "'$nome'" está vazia!' >> $HOME/vdown_tmp/lista.tmp
+					else
+						echo '### Lista "'$nome'" - total: '$count' ###' >> $HOME/vdown_tmp/lista.tmp
+						while read leia; do
+							titulo=$(echo $leia | cut -d"#" -f2 | sed 'y/-/ /')
+							url=$(echo $leia | cut -d"#" -f1)
+							dt=$(echo $leia | cut -d"#" -f3)
+							echo "$titulo: $url ($dt)" >> $HOME/vdown_tmp/lista.tmp
+						done < $HOME/vdown_tmp/lists/$nome/list_$nome.log
+					fi
+					echo "" >> $HOME/vdown_tmp/lista.tmp
+				done
+				count2=$(cat $HOME/vdown_tmp/lista.tmp | wc -l)
+				if [ $count2 -gt 30 ]; then
+					cat $HOME/vdown_tmp/lista.tmp | less
+					rm $HOME/vdown_tmp/lista.tmp
+				else
+					cat $HOME/vdown_tmp/lista.tmp
+					rm $HOME/vdown_tmp/lista.tmp
+				fi
+			else
+				echo "Não existe listas criadas"
+			fi;;
+		--clear-all)
+			listas=$(ls $HOME/vdown_tmp/lists) # conta as linhas do arquivo lists
+			for lista in $listas; do
+				count=$(cat $HOME/vdown_tmp/lists/$lista/list_$lista.log | wc -l)
+				if [ $count -gt 0 ]; then
+					rm $HOME/vdown_tmp/lists/$lista/list_$lista.log
+					touch $HOME/vdown_tmp/lists/$lista/list_$lista.log
+				else
+					echo "A lista $lista está vazia!"
+				fi
+			done;;
+		--down-lists)
+			# 1. verificar se existe alguma lista
+			count=$(ls $HOME/vdown_tmp/lists | wc -l)
+			if [ $count -gt 0 ]; then
+				# 2. criar um arquivo temporário da lista para leitura do loop
+				ls $HOME/vdown_tmp/lists > $HOME/vdown_tmp/tmp_down.log
+				# 3. ler cada lista por vez
+				while read leia; do
+					# 4. verificar se ela está vazia
+					lista=$(cat $HOME/vdown_tmp/lists/$leia/list_$leia.log | wc -l)
+					# 5. se tiver conteúdo, baixar esse conteúdo
+					if [ $lista -gt 0 ]; then
+						# 6. baixar e arquivar
+						echo -e "\033[01;37m     Download da lista \033[01;33m[ $leia ]\033[01;37m: \033[01;33m$lista\033[01;37m vídeo(s)\033[0m"
+						vdown --down-list $leia
+						vdown --arq-list -y $leia
+						echo -e "\n\033[01;37m  A lista \033[01;33m[ $leia ]\033[01;37m foi arquivada!\033[0m\n"
+					fi
+				done < $HOME/vdown_tmp/tmp_down.log
+				# 7. apagar arquivo temporário
+				rm $HOME/vdown_tmp/tmp_down.log
+			else
+				echo "Não existe listas criadas"
+			fi ;;
+		*)
+			echo "Comando não encontrado" ;;
+	esac
+# vdown --create-list lista
+# vdown --clear-list lista 
+# vdown --down-list lista
+# vdown --view-list lista
+# vdown --remove-list teste
+elif [ $# -eq 2 ]; then
+	case $1 in
+		#Visualiza conteúdo de um arquivo já arquivado
+		-f)
+			if cat $ptmp/archived/tmp_$2* &> /dev/null ; then
+				count=$(cat $ptmp/archived/tmp_$2* | wc -l)
+				cat $ptmp/archived/tmp_$2* >> $HOME/vdown_tmp/lista.tmp
+				while read leia; do
+					url=$(echo $leia | cut -d"#" -f1)
+					titulo=$(echo $leia | cut -d"#" -f2)
+					data=$(echo $leia | cut -d"#" -f3)
+					lista=$(echo $leia | cut -d"#" -f4)
+					echo "[$lista] $titulo: $url ($data)" >> $HOME/vdown_tmp/lista_arq.tmp
+				done < $HOME/vdown_tmp/lista.tmp
+				if [ $count -gt 30 ]; then
+					cat -n $HOME/vdown_tmp/lista_arq.tmp | less
+				else
+					cat -n $HOME/vdown_tmp/lista_arq.tmp
+				fi
+				rm $HOME/vdown_tmp/lista.tmp
+				rm $HOME/vdown_tmp/lista_arq.tmp
+			else
+				echo "Nenhum arquivo com essa data"
+			fi ;;
+		--create-list)
+			if [ -d $HOME/vdown_tmp/lists/$2 ]; then
+				if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ]; then
+					echo "A lista $2 já existe!"
+				else
+					touch $HOME/vdown_tmp/lists/$2/list_$2.log
+				fi
+			else
+				if [ -d $HOME/vdown_tmp/lists ]; then
+					echo "Criando lista..."
+				else
+					mkdir $HOME/vdown_tmp/lists
+				fi
+				mkdir $HOME/vdown_tmp/lists/$2
+				touch $HOME/vdown_tmp/lists/$2/list_$2.log
+			fi;;
+		--clear-list)
+			if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ]; then
+				count=$(cat $HOME/vdown_tmp/lists/$2/list_$2.log | wc -l)
+				if [ $count -gt 0 ]; then
+					rm $HOME/vdown_tmp/lists/$2/list_$2.log
+					touch $HOME/vdown_tmp/lists/$2/list_$2.log
+				else
+					echo "A lista $2 está vazia!"
+				fi
+			else
+				echo "Lista $2 não existe!"
+			fi;;
+		--view-list)
+			if [ -d $HOME/vdown_tmp/lists/$2/ ]; then
+				if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ]; then
+					count=$(cat $HOME/vdown_tmp/lists/$2/list_$2.log | wc -l)
+					if [ $count -ge 1 ]; then
+						echo '### Lista "'$2'" - total: '$count' ###' >> $HOME/vdown_tmp/lista.tmp
+						while read linha; do
+							titulo=$(echo $linha | cut -d"#" -f2 | sed 'y/-/ /')
+							url=$(echo $linha | cut -d"#" -f1)
+							dt=$(echo $linha | cut -d"#" -f3)
+							echo "$titulo:  $url ($dt)" >> $HOME/vdown_tmp/lista.tmp
+						done < $HOME/vdown_tmp/lists/$2/list_$2.log
+						if [ $count -gt 30 ]; then
+							cat $HOME/vdown_tmp/lista.tmp | less
+							rm $HOME/vdown_tmp/lista.tmp
+						else
+							cat $HOME/vdown_tmp/lista.tmp
+							rm $HOME/vdown_tmp/lista.tmp
+						fi
+					else
+						echo "Lista vazia!"
+					fi
+				else
+					echo "Lista vazia!"
+				fi
+			else
+				echo "A lista [ $2 ] não existe!"
+			fi;;
+		--arq-list)
+			if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ]; then
+				vlr=$(cat $HOME/vdown_tmp/lists/$2/list_$2.log | wc -l)
+				if [ $vlr -ge 1 ]; then
+					printf "Deseja arquivar dados da lista $2 [s/n]: "
+					read question
+					if [ -z $question ]; then
+						question='n'
+					fi
+		
+					if [ $question == "S" ] || [ $question == "s" ]; then
+						mv $HOME/vdown_tmp/lists/$2/list_$2.log $ptmp/archived/tmp_$data.log
+						touch $HOME/vdown_tmp/lists/$2/list_$2.log
+					else
+						echo "Dados não arquivados!"
+					fi
+				else
+					echo "A lista $2 está vazia!"
+				fi
+			else
+				echo "A lista $2 não existe!"
+			fi;;
+		--remove-list)
+			if [ -d $HOME/vdown_tmp/lists/$2 ]; then
+				rm -rf $HOME/vdown_tmp/lists/$2
+			else
+				echo "A lista [ $2 ] não existe!"
+			fi;;
+		--down-list)
+			if which cclive &> /dev/null; then
+				if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ]; then
+					cut -d'#' -f1 $HOME/vdown_tmp/lists/$2/list_$2.log > $HOME/vdown_tmp/lists/$2/tmp.txt
+					if [ -f $HOME/vdown_tmp/lists/$2/tmp.txt ]; then
+						count=$(cat $HOME/vdown_tmp/lists/$2/tmp.txt | wc -l)
+						line=1
+						if [ $count -gt 0 ]; then
+							while read leia; do
+								if [ -d $HOME/vdown_video ]; then
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line + 1]
+								else
+									mkdir $HOME/vdown_video
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line + 1]
+								fi
+							done < $HOME/vdown_tmp/lists/$2/tmp.txt
+							rm $HOME/vdown_tmp/lists/$2/tmp.txt
+						else
+							echo "Não há dados na lista $2!"
+						fi
+					else
+						echo "Erro ao baixar videos."
+					fi
+				else
+					echo "Lista $2 está vazia!"
+				fi
+			else
+				echo -e "Instale o programa cclive com:\n$ sudo apt-get install cclive"
+			fi ;;
+		# vdown -f --content
+		--files)
+			case $2 in
+				--content)
+					archived=$(ls -t $HOME/vdown_tmp/archived/)
+					echo "Aguarde enquanto os dados são carregados..."
+					for lista in $archived; do
+						echo "" >> $HOME/vdown_tmp/lista.tmp
+						echo "Lista: $lista" >> $HOME/vdown_tmp/lista.tmp
+						while read leia; do
+							titulo=$(echo $leia | cut -d"#" -f2)
+							url=$(echo $leia | cut -d"#" -f1)
+							dt=$(echo $leia | cut -d"#" -f3)
+							lst=$(echo $leia | cut -d"#" -f4)
+							echo "$titulo ($lst): $url - $dt" >> $HOME/vdown_tmp/lista.tmp
+						done < $HOME/vdown_tmp/archived/$lista
+					done
+					cat $HOME/vdown_tmp/lista.tmp | less
+					clear
+					rm $HOME/vdown_tmp/lista.tmp;;
+				*)
+					echo "Comando inválido!";;
+			esac;;
+		--open-list)
+			if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ]; then
+				count=$(cat $HOME/vdown_tmp/lists/$2/list_$2.log | wc -l)
+				if [ $count -gt 0 ]; then
+					gedit $HOME/vdown_tmp/lists/$2/list_$2.log
+				else
+					echo "A lista está vazia!"
+				fi
+			else
+				echo "Lista vazia!"
+			fi ;;
+			--remove-tmp)
+				if [ -f $HOME/vdown_tmp/archived/tmp_$2.log ]; then
+					rm $HOME/vdown_tmp/archived/tmp_$2.log
+				else
+					echo "Este arquivo não existe!"
+				fi ;;
+		*)
+			echo "Comando não encontrado" ;;
+	esac
+elif [ $# -eq 3 ]; then
+	case $1 in
+		# Adiciona arquivo a lista
+		-s | --save)
+			echo "$2#$3#$data_add#padrao" >> $ptmp/tmp.log ;;
+		--arq-list)
+			case $2 in
+				-y)
+					if [ -f $HOME/vdown_tmp/lists/$3/list_$3.log ]; then
+						vlr=$(cat $HOME/vdown_tmp/lists/$3/list_$3.log | wc -l)
+						if [ $vlr -ge 1 ]; then
+							mv $HOME/vdown_tmp/lists/$3/list_$3.log $ptmp/archived/tmp_$data.log
+							touch $HOME/vdown_tmp/lists/$3/list_$3.log
+						else
+							echo "A lista $3 está vazia!"
+						fi
+					else
+						echo "A lista $3 não existe!"
+					fi;;
+				*)
+					echo "Comando não encontrado: tente -y";;
+			esac;;
+		--down-lists)
+			if which cclive &> /dev/null; then
+				if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ] && [ -f $HOME/vdown_tmp/lists/$3/list_$3.log ]; then
+					cut -d'#' -f1 $HOME/vdown_tmp/lists/$2/list_$2.log > $HOME/vdown_tmp/lists/$2/tmp.txt
+					cut -d'#' -f1 $HOME/vdown_tmp/lists/$3/list_$3.log > $HOME/vdown_tmp/lists/$3/tmp.txt
+					line=1
+					if [ -f $HOME/vdown_tmp/lists/$2/tmp.txt ]; then
+						count1=$(cat $HOME/vdown_tmp/lists/$2/tmp.txt | wc -l)
+						if [ $count1 -gt 0 ]; then
+							while read leia; do
+								if [ -d $HOME/vdown_video ]; then
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line +1]
+								else
+									mkdir $HOME/vdown_video
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line +1]
+								fi
+							done < $HOME/vdown_tmp/lists/$2/tmp.txt
+							rm $HOME/vdown_tmp/lists/$2/tmp.txt
+						else
+							echo "Não há vídeos na lista $2 a serem baixados!"
+						fi
+					else
+						echo "Erro ao baixar videos."
+					fi
+					if [ -f $HOME/vdown_tmp/lists/$3/tmp.txt ]; then
+						count2=$(cat $HOME/vdown_tmp/lists/$3/tmp.txt | wc -l)
+						if [ $count2 -gt 0 ]; then
+							while read leia; do
+								if [ -d $HOME/vdown_video ]; then
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line + 1]
+								else
+									mkdir $HOME/vdown_video
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line + 1]
+								fi
+							done < $HOME/vdown_tmp/lists/$3/tmp.txt
+							rm $HOME/vdown_tmp/lists/$3/tmp.txt
+						else
+							echo "Não há vídeos na lista $3 a serem baixados!"
+						fi
+					else
+						echo "Erro ao baixar videos."
+					fi
+				else
+					echo "Lista $3 está vazia!"
+				fi
+			else
+				echo -e "Instale o cclive com:\n$ sudo apt-get install cclive"
+			fi;;
+		--arq-lists)
+			if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ] && [ -f $HOME/vdown_tmp/lists/$3/list_$3.log ]; then
+				list1=$(cat $HOME/vdown_tmp/lists/$2/list_$2.log | wc -l)
+				list2=$(cat $HOME/vdown_tmp/lists/$3/list_$3.log | wc -l)
+				if [ $list1 -ge 1 ]; then
+					printf "Deseja arquivar dados da lista $2 [s/n]: "
+					read question
+					if [ $question == "S" ] || [ $question == "s" ]; then
+						mv $HOME/vdown_tmp/lists/$2/list_$2.log $ptmp/archived/tmp_$data.log
+						touch $HOME/vdown_tmp/lists/$2/list_$2.log
+					fi
+				else
+					echo "A lista $2 está vazia!"
+				fi
+				if [ $list2 -ge 1 ]; then
+					printf "Deseja arquivar dados da lista $3 [s/n]: "
+					read question
+					if [ $question == "S" ] || [ $question == "s" ]; then
+						cat $HOME/vdown_tmp/lists/$3/list_$3.log >> $ptmp/archived/tmp_$data.log
+						rm $HOME/vdown_tmp/lists/$3/list_$3.log
+						touch $HOME/vdown_tmp/lists/$3/list_$3.log
+					fi
+				else
+					echo "A lista $3 está vazia!"
+				fi
+			else
+				echo "A(s) lista(s) $2 e/ou $3 não existe(m)!"
+			fi;;
+		# vdown --restore nome_lista arquivo.log
+		--restore)
+			if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ]; then 
+				if cat $HOME/vdown_tmp/archived/tmp_$3*.log &> /dev/null ; then
+					count=$(cat $HOME/vdown_tmp/lists/$2/list_$2.log | wc -l)
+					if [ $count -gt 0 ]; then
+						echo -e "Já existe dados na lista $2."
+						printf "Deseja acrescentar arquivos restaurados?[S/n] "
+						read resp
+						if [ -z $resp ]; then
+							resp="s"
+						fi
+						if [ $resp == "s" ] || [ $resp == "S" ]; then
+							cat $HOME/vdown_tmp/archived/tmp_$3*.log >> $HOME/vdown_tmp/lists/$2/list_$2.log
+							echo "Arquivos restaurados para lista $2."
+						fi
+					else
+						cat $HOME/vdown_tmp/archived/tmp_$3*.log >> $HOME/vdown_tmp/lists/$2/list_$2.log
+						echo "Arquivos restaurados para lista $2."
+					fi
+
+				else
+					echo "Nenhum arquivos encontrado!"
+				fi
+			else
+				echo "A lista $2 não existe!"
+			fi;;
+		*)
+			echo -e "Comando não encontrado.\nTente: \033[1;32m$ vdown --arq-list -y nome_lista\n" ;;
+	esac
+# vdown --add-list lista "conteudo" título
+elif [ $# -eq 4 ]; then
+	case $1 in
+		-al | --add-list)
+			if [ -d $HOME/vdown_tmp/lists/$2 ]; then
+				echo "$3#$4#$data_add#$2" >> $HOME/vdown_tmp/lists/$2/list_$2.log
+				exit 0
+			else
+				echo "A lista $2 não existe!"
+			fi;;
+		# Encadear três listas para download
+		--down-lists)
+			if which cclive &> /dev/null; then
+				if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ] && [ -f $HOME/vdown_tmp/lists/$3/list_$3.log ] && [ -f $HOME/vdown_tmp/lists/$4/list_$4.log ]; then
+					line=1
+					cut -d'#' -f1 $HOME/vdown_tmp/lists/$2/list_$2.log > $HOME/vdown_tmp/lists/$2/tmp.txt
+					cut -d'#' -f1 $HOME/vdown_tmp/lists/$3/list_$3.log > $HOME/vdown_tmp/lists/$3/tmp.txt
+					cut -d'#' -f1 $HOME/vdown_tmp/lists/$4/list_$4.log > $HOME/vdown_tmp/lists/$4/tmp.txt
+					if [ -f $HOME/vdown_tmp/lists/$2/tmp.txt ]; then
+						count1=$(cat $HOME/vdown_tmp/lists/$2/tmp.txt | wc -l)
+						if [ $count1 -gt 0 ]; then
+							while read leia; do
+								if [ -d $HOME/vdown_video ]; then
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line +1]
+								else
+									mkdir $HOME/vdown_video
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line +1]
+								fi
+							done < $HOME/vdown_tmp/lists/$2/tmp.txt
+							rm $HOME/vdown_tmp/lists/$2/tmp.txt
+						else
+							echo "Não há vídeos na lista $2 a serem baixados!"
+						fi
+					else
+						echo "Erro ao baixar videos."
+					fi
+					if [ -f $HOME/vdown_tmp/lists/$3/tmp.txt ]; then
+						count2=$(cat $HOME/vdown_tmp/lists/$3/tmp.txt | wc -l)
+						if [ $count2 -gt 0 ]; then
+							while read leia; do
+								if [ -d $HOME/vdown_video ]; then
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line + 1]
+								else
+									mkdir $HOME/vdown_video
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line + 1]
+								fi
+							done < $HOME/vdown_tmp/lists/$3/tmp.txt
+							rm $HOME/vdown_tmp/lists/$3/tmp.txt
+						else
+							echo "Não há vídeos na lista $3 a serem baixados!"
+						fi
+					else
+						echo "Erro ao baixar videos."
+					fi
+					if [ -f $HOME/vdown_tmp/lists/$4/tmp.txt ]; then
+						count3=$(cat $HOME/vdown_tmp/lists/$4/tmp.txt | wc -l)
+						if [ $count3 -gt 0 ]; then
+							while read leia; do
+								if [ -d $HOME/vdown_video ]; then
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line + 1]
+								else
+									mkdir $HOME/vdown_video
+									echo "Linha: $line"
+									cd $HOME/vdown_video
+									cclive -s best $leia
+									line=$[line + 1]
+								fi
+							done < $HOME/vdown_tmp/lists/$4/tmp.txt
+							rm $HOME/vdown_tmp/lists/$4/tmp.txt
+						else
+							echo "Não há vídeos na lista $4 a serem baixados!"
+						fi
+					else
+						echo "Erro ao baixar videos."
+					fi
+				else
+					echo "Lista $4 está vazia!"
+				fi
+			else
+				echo -e "Instale o cclive com:\n$ sudo apt-get install cclive"
+			fi ;;
+		--arq-lists)
+			if [ -f $HOME/vdown_tmp/lists/$2/list_$2.log ] && [ -f $HOME/vdown_tmp/lists/$3/list_$3.log ] && [ -f $HOME/vdown_tmp/lists/$4/list_$4.log ]; then
+				list1=$(cat $HOME/vdown_tmp/lists/$2/list_$2.log | wc -l)
+				list2=$(cat $HOME/vdown_tmp/lists/$3/list_$3.log | wc -l)
+				list3=$(cat $HOME/vdown_tmp/lists/$4/list_$4.log | wc -l)
+				if [ $list1 -ge 1 ]; then
+					printf "Deseja arquivar dados da lista $2 [s/n]: "
+					read question
+					if [ $question == "S" ] || [ $question == "s" ]; then
+						mv $HOME/vdown_tmp/lists/$2/list_$2.log $ptmp/archived/tmp_$data.log
+						touch $HOME/vdown_tmp/lists/$2/list_$2.log
+					fi
+				else
+					echo "A lista $2 está vazia!"
+				fi
+				if [ $list2 -ge 1 ]; then
+					printf "Deseja arquivar dados da lista $3 [s/n]: "
+					read question
+					if [ $question == "S" ] || [ $question == "s" ]; then
+						cat $HOME/vdown_tmp/lists/$3/list_$3.log >> $ptmp/archived/tmp_$data.log
+						rm $HOME/vdown_tmp/lists/$3/list_$3.log
+						touch $HOME/vdown_tmp/lists/$3/list_$3.log
+					fi
+				else
+					echo "A lista $3 está vazia!"
+				fi
+				if [ $list3 -ge 1 ]; then
+					printf "Deseja arquivar dados da lista $4 [s/n]: "
+					read question
+					if [ $question == "S" ] || [ $question == "s" ]; then
+						cat $HOME/vdown_tmp/lists/$4/list_$4.log >> $ptmp/archived/tmp_$data.log
+						rm $HOME/vdown_tmp/lists/$4/list_$4.log
+						touch $HOME/vdown_tmp/lists/$4/list_$4.log
+					fi
+				else
+					echo "A lista $4 está vazia!"
+				fi
+			else
+				echo "A(s) lista(s) $2 e/ou $3 e/ou $4 não existe(m)!"
+			fi;;
+		*)
+			echo "Comando não encontrado! 4 entradas" ;;
+
+	esac
+elif [ $# -eq 5 ] || [ $# -eq 6 ]; then
+	case $1 in
+		--arq-lists)
+			case $2 in
+				-y)
+					case $3 in
+						-2)
+							if [ $# -eq 6 ]; then
+								echo "excesso de parâmetros!"
+							else
+								if [ -f $HOME/vdown_tmp/lists/$4/list_$4.log ] && [ -f $HOME/vdown_tmp/lists/$5/list_$5.log ]; then
+									list1=$(cat $HOME/vdown_tmp/lists/$4/list_$4.log | wc -l)
+									list2=$(cat $HOME/vdown_tmp/lists/$5/list_$5.log | wc -l)
+									if [ $list1 -ge 1 ]; then
+										mv $HOME/vdown_tmp/lists/$4/list_$4.log $ptmp/archived/tmp_$data.log
+										touch $HOME/vdown_tmp/lists/$4/list_$4.log
+									else
+										echo "A lista $4 está vazia!"
+									fi
+									if [ $list2 -ge 1 ]; then
+										cat $HOME/vdown_tmp/lists/$5/list_$5.log >> $ptmp/archived/tmp_$data.log
+										rm $HOME/vdown_tmp/lists/$5/list_$5.log
+										touch $HOME/vdown_tmp/lists/$5/list_$5.log
+									else
+										echo "A lista $5 está vazia!"
+									fi
+								else
+									echo "A(s) lista(s) $4 e/ou $5 não existe(m)!"
+								fi
+							fi;;
+						-3)
+							if [ -f $HOME/vdown_tmp/lists/$4/list_$4.log ] && [ -f $HOME/vdown_tmp/lists/$5/list_$5.log ] && [ -f $HOME/vdown_tmp/lists/$6/list_$6.log ]; then
+								list1=$(cat $HOME/vdown_tmp/lists/$4/list_$4.log | wc -l)
+								list2=$(cat $HOME/vdown_tmp/lists/$5/list_$5.log | wc -l)
+								list3=$(cat $HOME/vdown_tmp/lists/$6/list_$6.log | wc -l)
+								if [ $list1 -ge 1 ]; then
+									mv $HOME/vdown_tmp/lists/$4/list_$4.log $ptmp/archived/tmp_$data.log
+									touch $HOME/vdown_tmp/lists/$4/list_$4.log
+								else
+									echo "A lista $4 está vazia!"
+								fi
+								if [ $list2 -ge 1 ]; then
+									cat $HOME/vdown_tmp/lists/$5/list_$5.log >> $ptmp/archived/tmp_$data.log
+									rm $HOME/vdown_tmp/lists/$5/list_$5.log
+									touch $HOME/vdown_tmp/lists/$5/list_$5.log
+								else
+									echo "A lista $5 está vazia!"
+								fi
+								if [ $list3 -ge 1 ]; then
+									cat $HOME/vdown_tmp/lists/$6/list_$6.log >> $ptmp/archived/tmp_$data.log
+									rm $HOME/vdown_tmp/lists/$6/list_$6.log
+									touch $HOME/vdown_tmp/lists/$6/list_$6.log
+								else
+									echo "A lista $6 está vazia!"
+								fi
+							else
+								echo "A(s) lista(s) $4 e/ou $5 e/ou $6 não existe(m)!"
+							fi;;
+						*)
+							echo "Comando inválido!";;
+					esac;;
+				*)
+					echo "Comando inválido!";;
+			esac;;
+		*)
+			if [ $1 != "--add" ]; then
+				echo "Comando não encontrado!" 
+			fi ;;
+	esac
+fi
+
+if [ $# -ge 4 ]; then
+	# vdown --add nome_lista "mensagem" [ n urls ]
+	case $1 in
+		--add)
+			lista=$2
+			msg=$3
+			if [ -d $HOME/vdown_tmp/lists/$lista ]; then
+				while [ -n "$4" ]; do
+					echo $4#$msg#$data_add#$lista >> $HOME/vdown_tmp/lists/$lista/list_$lista.log
+					shift
+				done
+			else
+				echo "A lista $lista não existe!"
+			fi;;
+		*)
+			if [ $1 == "--add-list" ] || [ $1 == "-al" ]; then
+				echo -e "\nComando para apenas uma entrada de url.\n \033[1;32m$ vdown --add-list <lista> <url> <título>\n"
+			else
+				echo "Comando não encontrado! Multiplas entradas" &>/dev/null
+			fi ;;
+	esac
+fi
